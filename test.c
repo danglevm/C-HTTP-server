@@ -12,6 +12,30 @@ typedef struct sockaddr {
 } sockaddr;
 
 
+
+/*
+* A pointer to a struct sockaddr_in4 can be cast to a pointer to a struct sockaddr and vice versa
+* connect() wants a pointer to struct sockaddr but you can use struct sockadder_in4 and cast it at the last minute
+*/
+
+typedef struct in4_addr {
+    uint32_t s_addr; //32-bit int
+} in4_addr;
+
+//for IPv4 connection
+typedef struct sockaddr_in4 {
+    short int          sin4_family; //address family - AF_INET/AF_INET6
+    //short int occupies 2 bytes of memory, from -32,767 to 32,767
+    unsigned short int sin4_port; //port number. Must be in the Network byte Order (by using htons()!)
+    in4_addr    sin4_addr; //internet address
+    unsigned char      sin_zero[8]; //same size as struct sockadder
+    //sin_zero is included to pad the struct to the length of a struct sockaddr. 
+    //sin_zero should be set to all zeros with the function memset()
+} sockaddr_in4;
+
+
+
+
 //prepares socket address structures for subsequent use
 //call getaddrinfo() - return a pointer to a new linked list of these structures
 typedef struct addrinfo{
@@ -27,7 +51,7 @@ typedef struct addrinfo{
 } addrinfo;
 
 
-
+//sockaddr_storage. check the ss_family field to see if it's AF_INET or AF_INET6
 
 int main() {
     return EXIT_SUCCESS;
