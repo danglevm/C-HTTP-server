@@ -1,13 +1,13 @@
 #include <sys/types.h> //definitions of a number of data types used in syscalls
 //for socket.h and in.h to work, need types.h
 #include <sys/socket.h> //definitions of structures needed for sockets - sockaddr
-#include <netdb.h>
+#include <netdb.h> //for ai flags - AI_PASSIVE
 #include <stdio.h> //C I/O inputs
 #include <stdlib.h> //4 variable types, several macros, various functions
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <string.h>
+#include <netdb.h> //definitions for network db operations
+#include <arpa/inet.h> //definitions for internet operations - in_addr and in6_addr
+#include <netinet/in.h>//defines some address info protocols
+#include <string.h> //for string operations
 
 
 //port number specified as a command line argument
@@ -21,7 +21,7 @@ int main (int argc, char *argv []) {
     //socket address structures returned in the list pointed by res
     struct addrinfo hints;
     struct addrinfo *res;
-
+    struct addrinfo *head;
     //length of IPv6 address string
     char ipstr [INET6_ADDRSTRLEN];
 
@@ -45,8 +45,24 @@ int main (int argc, char *argv []) {
     //hints - type of service requested
     status = getaddrinfo(NULL, argv[1] , &hints, &res);
 
+    //0 - success, non-zero - error. 
+    //gai_strerror translates error codes to a human readable string, suitable for error reporting
+    if (status != 0) {
+        fprintf (stderr, "getnameinfo: %s\n", gai_strerror(status));
+        return EXIT_FAILURE;
+    }
 
+    //looping through the linked list
+    //ai_next - points to the next node addrinfo pointer
+    for (head = res; head != NULL; head = head->ai_next) {
+        //IPv4 protocol family
+        if (head->ai_family == AF_INET) {
+
+        } else if (head->ai_family == AF_INET6) {
+
+        }
+    }
     //free one or more addrinfo structures returned from getaddrinfo
     freeaddrinfo(res);
-
+    return EXIT_SUCCESS;
 }
