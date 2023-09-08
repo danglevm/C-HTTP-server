@@ -1,3 +1,11 @@
 #Ignore a file without extension
-/home/bollabollo/Documents/C Programs/socket
+#Ignore all
+*
 
+#Unignore all with extensions
+!*.*
+
+# Unignore all dirs
+!*/
+
+###Combinations above ignore all files without extension

@@ -10,6 +10,8 @@
 #include <string.h> //for string operations
 
 
+#define PORT "3490" //port users will connect to
+
 //port number specified as a command line argument
 //argc - number of paramaters plus 1 to include the name of the program executed to get the process running
 //argc - must always be larger than 0
@@ -38,7 +40,7 @@ int main (int argc, char *argv []) {
     hints.ai_family = AF_UNSPEC; //AF-agnostic - IPv4 or IPv6
     hints.ai_socktype = SOCK_STREAM; //Stream socket - bidirectional
     hints.ai_protocol = 0; //protocol for the returned socket address
-    hints.ai_flags = AI_PASSIVE;
+    hints.ai_flags = AI_PASSIVE; //Assign the address of the local host to the socket structure
 
     //getaddressinfo(hostname, port, hints, results)
     //hostname = NULL will be assigned depending on the hints flag - 127.0.0.1?
@@ -48,19 +50,33 @@ int main (int argc, char *argv []) {
     //0 - success, non-zero - error. 
     //gai_strerror translates error codes to a human readable string, suitable for error reporting
     if (status != 0) {
-        fprintf (stderr, "getnameinfo: %s\n", gai_strerror(status));
+        fprintf (stderr, "getaddrinfo error: %s\n", gai_strerror(status));
         return EXIT_FAILURE;
     }
 
+    
+    int sockfd;
     //looping through the linked list
     //ai_next - points to the next node addrinfo pointer
     for (head = res; head != NULL; head = head->ai_next) {
-        //IPv4 protocol family
-        if (head->ai_family == AF_INET) {
-
-        } else if (head->ai_family == AF_INET6) {
-
+        //tries to find a valid struct and bind to it
+        
+        sockfd = socket(head->ai_family, head->ai_socktype, head->ai_protocol);
+        
+        if (sockfd == -1){ //error
+        //perror - print to stderror stream
+            perror("Server: socket file descriptor error. Moving onto next address...");
+            continue;
         }
+
+        if (bind(sockfd, head->ai_addr, head->ai_addrlen)) {
+            perror("Server: socket binding error. Moving onto next address...");
+            continue;
+        }
+
+
+        //once we found the valid struct, stop finding
+        break;
     }
     //free one or more addrinfo structures returned from getaddrinfo
     freeaddrinfo(res);
