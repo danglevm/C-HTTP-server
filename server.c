@@ -1,3 +1,5 @@
+#include <asm-generic/socket.h>
+#include <unistd.h>//for closing file socket. POSIX system?
 #include <sys/types.h> //definitions of a number of data types used in syscalls
 //for socket.h and in.h to work, need types.h
 #include <sys/socket.h> //definitions of structures needed for sockets - sockaddr
@@ -12,12 +14,21 @@
 
 #define PORT "3490" //port users will connect to
 
+#define BACKLOG_SIZE 15 //number of connections that can be in the queue.
+
 //port number specified as a command line argument
 //argc - number of paramaters plus 1 to include the name of the program executed to get the process running
 //argc - must always be larger than 0
 //arg count, arg[0] - name of executable, arg[1] - port in this case
 int main (int argc, char *argv []) {
     int status;
+
+    char msg [] = "Good morning world!";
+
+    size_t msg_len = sizeof(msg);
+
+    //storing the value of the socket file descriptor
+    int sockfd, connected_socketfd;
 
     //hints points to an addrinfo struct that specifies criteria for the 
     //socket address structures returned in the list pointed by res
@@ -27,11 +38,17 @@ int main (int argc, char *argv []) {
     //length of IPv6 address string
     char ipstr [INET6_ADDRSTRLEN];
 
-    //1 for the port, 1 for the program
-    if (argc != 2) {
-        fprintf(stderr,"Error - port argument unspecified");
-        return 1; //return 1 in main means program does not execute successfully and there is some error
-    }
+    int enable_sockopt = 1;
+
+    //only contains the client's address, which is what we care about
+    struct sockaddr_storage client_address;
+    socklen_t client_address_size;
+
+    // //1 for the port, 1 for the program
+    // if (argc != 2) {
+    //     perror("Port argument unspecified");
+    //     return EXIT_FAILURE; //return 1 in main means program does not execute successfully and there is some error
+    // }
 
     //void *, int, unsigned long - set n characters of string to c for n numbers
     memset(&hints, 0, sizeof hints);
@@ -45,7 +62,7 @@ int main (int argc, char *argv []) {
     //getaddressinfo(hostname, port, hints, results)
     //hostname = NULL will be assigned depending on the hints flag - 127.0.0.1?
     //hints - type of service requested
-    status = getaddrinfo(NULL, argv[1] , &hints, &res);
+    status = getaddrinfo(NULL, PORT , &hints, &res);
 
     //0 - success, non-zero - error. 
     //gai_strerror translates error codes to a human readable string, suitable for error reporting
@@ -55,12 +72,14 @@ int main (int argc, char *argv []) {
     }
 
     
-    int sockfd;
+    
     //looping through the linked list
     //ai_next - points to the next node addrinfo pointer
     for (head = res; head != NULL; head = head->ai_next) {
         //tries to find a valid struct and bind to it
         
+        //Domain should be IPv4 or IPv6
+        //Socket type should be sock_stream
         sockfd = socket(head->ai_family, head->ai_socktype, head->ai_protocol);
         
         if (sockfd == -1){ //error
@@ -68,9 +87,20 @@ int main (int argc, char *argv []) {
             perror("Server: socket file descriptor error. Moving onto next address...");
             continue;
         }
+        /**
+        * socket file descriptor
+        * at the socket level: SOL_SOCKET
+        * SO_REUSEADDR - reuse of local address
+        * to enable sockopt, value of sockopt must be non-zero
+        */
+        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable_sockopt, sizeof(enable_sockopt)) == -1){
+            perror("Server: socket option error. Moving onto next address...");
+            continue;
+        }
 
-        if (bind(sockfd, head->ai_addr, head->ai_addrlen)) {
+        if ((bind(sockfd, head->ai_addr, head->ai_addrlen)) == -1) {
             perror("Server: socket binding error. Moving onto next address...");
+            close(sockfd);
             continue;
         }
 
@@ -80,5 +110,34 @@ int main (int argc, char *argv []) {
     }
     //free one or more addrinfo structures returned from getaddrinfo
     freeaddrinfo(res);
+
+
+    //if we go through the whole thing, and there is no valid struct
+    if (head == NULL) {
+        perror("Server: failed to bind to a socket error. Shutting down the server...");
+        return EXIT_FAILURE;
+    }
+    //listen on
+    if (listen(sockfd, BACKLOG_SIZE) == -1) {
+        perror("Server: error listening on socket. Shutting down the server...");
+        return EXIT_FAILURE;
+    }
+
+    //main loop for accepting connection
+    for (;;) {
+        client_address_size = sizeof(client_address);
+        connected_socketfd = accept(sockfd, (struct sockaddr *) &client_address, &client_address_size);
+        if (connected_socketfd == -1) {
+            perror("Server: Connection accept error. Moving on to next request...");
+            continue;
+        }
+
+        if (send(connected_socketfd, msg, msg_len, 0) == -1) {
+            perror("Server: message send error. ");
+            close(connected_socketfd);
+            return EXIT_FAILURE;
+        }
+    
+    }
     return EXIT_SUCCESS;
 }
