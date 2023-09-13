@@ -1,4 +1,5 @@
 #include <asm-generic/socket.h>
+#include <stddef.h>
 #include <unistd.h>//for closing file socket. POSIX system?
 #include <sys/types.h> //definitions of a number of data types used in syscalls
 //for socket.h and in.h to work, need types.h
@@ -11,10 +12,28 @@
 #include <netinet/in.h>//defines some address info protocols
 #include <string.h> //for string operations
 
-
+//could not get printf to print to stdout, only to stderr
 #define PORT "3490" //port users will connect to
 
 #define BACKLOG_SIZE 15 //number of connections that can be in the queue.
+
+
+
+//typecast sockaddr to sockaddr_in for IPv4 or sockaddr_in6 for ipv6
+//
+void * get_in_addr (struct sockaddr *addr) {
+    if (addr->sa_family == AF_INET) {
+        //return a pointer to an struct containing internet address for IPv4
+        return &(((struct sockaddr_in*)addr)->sin_addr);
+    }
+
+    //IPv6 - AF_INET6
+    return &(((struct sockaddr_in6 *)addr)->sin6_addr);
+
+}
+
+
+
 
 //port number specified as a command line argument
 //argc - number of paramaters plus 1 to include the name of the program executed to get the process running
@@ -23,26 +42,37 @@
 int main (int argc, char *argv []) {
     int status;
 
-    char msg [] = "Good morning world!";
+    char msg [] = "Goodbye cruel world!";
 
     size_t msg_len = sizeof(msg);
 
     //storing the value of the socket file descriptor
     int sockfd, connected_socketfd;
 
+
+    /**
+    *
+    */
     //hints points to an addrinfo struct that specifies criteria for the 
     //socket address structures returned in the list pointed by res
     struct addrinfo hints;
     struct addrinfo *res;
     struct addrinfo *head;
-    //length of IPv6 address string
-    char ipstr [INET6_ADDRSTRLEN];
+    //length of IPv6 address string, which is longer than IPv4, for use by inet_ntop
+    char dst [INET6_ADDRSTRLEN];
 
     int enable_sockopt = 1;
 
     //only contains the client's address, which is what we care about
     struct sockaddr_storage client_address;
     socklen_t client_address_size;
+
+    /*
+    *
+    * for use by getpeername()
+    */
+    struct sockaddr * peer;
+    
 
     // //1 for the port, 1 for the program
     // if (argc != 2) {
@@ -51,6 +81,7 @@ int main (int argc, char *argv []) {
     // }
 
     //void *, int, unsigned long - set n characters of string to c for n numbers
+    //reset hints, which is resetting the criteria for the service returned by getaddrinfo
     memset(&hints, 0, sizeof hints);
 
     //since hints is non-NULL, it points to an addrinfo struct with criteria that limit the set of socket addresses returned by getaddrinfo()
@@ -59,12 +90,12 @@ int main (int argc, char *argv []) {
     hints.ai_protocol = 0; //protocol for the returned socket address
     hints.ai_flags = AI_PASSIVE; //Assign the address of the local host to the socket structure
 
-    //getaddressinfo(hostname, port, hints, results)
+
     //hostname = NULL will be assigned depending on the hints flag - 127.0.0.1?
     //hints - type of service requested
     status = getaddrinfo(NULL, PORT , &hints, &res);
 
-    //0 - success, non-zero - error. 
+    
     //gai_strerror translates error codes to a human readable string, suitable for error reporting
     if (status != 0) {
         fprintf (stderr, "getaddrinfo error: %s\n", gai_strerror(status));
@@ -117,21 +148,32 @@ int main (int argc, char *argv []) {
         perror("Server: failed to bind to a socket error. Shutting down the server...");
         return EXIT_FAILURE;
     }
-    //listen on
+    //listen on connection socket
     if (listen(sockfd, BACKLOG_SIZE) == -1) {
         perror("Server: error listening on socket. Shutting down the server...");
         return EXIT_FAILURE;
     }
 
+    fprintf(stderr, "Waiting for connections...\n");
+
     //main loop for accepting connection
     for (;;) {
         client_address_size = sizeof(client_address);
+        //client_address points to a sockaddr struct, filled in with the address of the peer socket
         connected_socketfd = accept(sockfd, (struct sockaddr *) &client_address, &client_address_size);
         if (connected_socketfd == -1) {
-            perror("Server: Connection accept error. Moving on to next request...");
+            perror("Server: Client socket connection acceptance error. Moving on to next request...");
             continue;
         }
 
+        
+
+        //src (2nd parameter) can either point to a struct_inaddr or struct in6_addr, which is found by get_in_addr
+        inet_ntop(client_address.ss_family, get_in_addr((struct sockaddr *)&client_address), dst, sizeof(dst));
+        fprintf(stderr, "Server: received incoming connection from %s\n", dst); 
+        
+            
+        
         if (send(connected_socketfd, msg, msg_len, 0) == -1) {
             perror("Server: message send error. ");
             close(connected_socketfd);
