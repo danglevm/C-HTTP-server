@@ -13,9 +13,11 @@
 #include <string.h> //for string operations
 
 //could not get printf to print to stdout, only to stderr
-#define PORT "3490" //port users will connect to
+#define PORT "8080" //port users will connect to. Alternative to port 80
 
 #define BACKLOG_SIZE 15 //number of connections that can be in the queue.
+
+#define BUFFER_SIZE 4096
 
 
 
@@ -32,6 +34,14 @@ void * get_in_addr (struct sockaddr *addr) {
 
 }
 
+// void build200HTTPResponse (char *response, size_t response_len){ 
+//     //reason phrase OK 
+//     //carriage character \r
+//     //
+//     char *message = "HTTP/1.0 200 OK \r\n";
+//     snprintf(message, sizeof(message), message, ...)
+// }
+
 
 
 
@@ -42,9 +52,11 @@ void * get_in_addr (struct sockaddr *addr) {
 int main (int argc, char *argv []) {
     int status;
 
-    char msg [] = "Goodbye cruel world!";
+    char response [] = "HTTP/1.0 200 OK\r\n"
+                       "Content-type: text/html\r\n\r\n"
+                       "<html>Hello World!</html>\r\n";
 
-    size_t msg_len = sizeof(msg);
+    size_t response_len = sizeof(response);
 
     //storing the value of the socket file descriptor
     int sockfd, connected_socketfd;
@@ -174,11 +186,13 @@ int main (int argc, char *argv []) {
         
             
         
-        if (send(connected_socketfd, msg, msg_len, 0) == -1) {
+        if (send(connected_socketfd, response, response_len, 0) == -1) {
             perror("Server: message send error. ");
             close(connected_socketfd);
             return EXIT_FAILURE;
         }
+
+        close (connected_socketfd);
     
     }
     return EXIT_SUCCESS;
