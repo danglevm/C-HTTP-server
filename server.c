@@ -1,13 +1,12 @@
-#include <asm-generic/socket.h>
-#include <stddef.h>
+#include <asm-generic/socket.h> //a bunch of socket options
+#include <stddef.h> //NULL and size_t, ptrdiff_t
 #include <unistd.h>//for closing file socket. POSIX system?
 #include <sys/types.h> //definitions of a number of data types used in syscalls
 //for socket.h and in.h to work, need types.h
 #include <sys/socket.h> //definitions of structures needed for sockets - sockaddr
-#include <netdb.h> //for ai flags - AI_PASSIVE
+#include <netdb.h> //for ai flags - AI_PASSIVE. Network database operations
 #include <stdio.h> //C I/O inputs
 #include <stdlib.h> //4 variable types, several macros, various functions
-#include <netdb.h> //definitions for network db operations
 #include <arpa/inet.h> //definitions for internet operations - in_addr and in6_addr
 #include <netinet/in.h>//defines some address info protocols
 #include <string.h> //for string operations
@@ -17,7 +16,15 @@
 
 #define BACKLOG_SIZE 15 //number of connections that can be in the queue.
 
-#define BUFFER_SIZE 4096
+#define MAX_DATA_SIZE 128 //max number of bytes
+
+#define GET_REQUEST "GET"
+
+#define HEAD_REQUEST "HEAD"
+
+#define POST_REQUEST "POST"
+
+#define RESPONSE_SIZE 1024 //1024 characters
 
 
 
@@ -32,6 +39,25 @@ void * get_in_addr (struct sockaddr *addr) {
     //IPv6 - AF_INET6
     return &(((struct sockaddr_in6 *)addr)->sin6_addr);
 
+}
+
+char * buildHttpResponse (char requestType []) {
+     //GET request
+        if (strcmp(requestType, GET_REQUEST) == 0) {
+            return     "HTTP/1.0 200 OK\r\n"
+                       "Content-type: text/html\r\n\r\n"
+                       "<html>Hello World!</html>\r\n";
+                
+        }  else if ((strcmp(requestType, HEAD_REQUEST) == 0) || (strcmp(requestType, POST_REQUEST) == 0)){
+            //HEAD or POST request
+            return     "HTTP/1.0 501 Not Implemented\r\n"
+                       "Content-type: text/html\r\n\r\n"
+                       "<html>Not Hello World!</html>\r\n";
+        } else {
+            return     "HTTP/1.0 400 Bad Request\r\n"
+                       "Content-type: text/html\r\n\r\n"
+                       "<html>Goodbye World!</html>\r\n";
+        }
 }
 
 // void build200HTTPResponse (char *response, size_t response_len){ 
@@ -51,16 +77,15 @@ void * get_in_addr (struct sockaddr *addr) {
 //arg count, arg[0] - name of executable, arg[1] - port in this case
 int main (int argc, char *argv []) {
     int status;
-
-    char response [] = "HTTP/1.0 200 OK\r\n"
-                       "Content-type: text/html\r\n\r\n"
-                       "<html>Hello World!</html>\r\n";
-
-    size_t response_len = sizeof(response);
+    //one line separation between HTTP header and its body
+    
 
     //storing the value of the socket file descriptor
-    int sockfd, connected_socketfd;
+    int sockfd;
 
+    char recv_buff [MAX_DATA_SIZE];
+
+    char response [RESPONSE_SIZE];
 
     /**
     *
@@ -110,7 +135,7 @@ int main (int argc, char *argv []) {
     
     //gai_strerror translates error codes to a human readable string, suitable for error reporting
     if (status != 0) {
-        fprintf (stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+        fprintf (stderr, "Server: get address info error: %s\n", gai_strerror(status));
         return EXIT_FAILURE;
     }
 
@@ -127,7 +152,7 @@ int main (int argc, char *argv []) {
         
         if (sockfd == -1){ //error
         //perror - print to stderror stream
-            perror("Server: socket file descriptor error. Moving onto next address...");
+            perror("Server: unable to create socket error. Moving onto next address...");
             continue;
         }
         /**
@@ -170,10 +195,12 @@ int main (int argc, char *argv []) {
 
     //main loop for accepting connection
     for (;;) {
+        int connected_sockfd;
         client_address_size = sizeof(client_address);
+        char delim[] = " ";
         //client_address points to a sockaddr struct, filled in with the address of the peer socket
-        connected_socketfd = accept(sockfd, (struct sockaddr *) &client_address, &client_address_size);
-        if (connected_socketfd == -1) {
+        connected_sockfd = accept(sockfd, (struct sockaddr *) &client_address, &client_address_size);
+        if (connected_sockfd == -1) {
             perror("Server: Client socket connection acceptance error. Moving on to next request...");
             continue;
         }
@@ -184,15 +211,25 @@ int main (int argc, char *argv []) {
         inet_ntop(client_address.ss_family, get_in_addr((struct sockaddr *)&client_address), dst, sizeof(dst));
         fprintf(stderr, "Server: received incoming connection from %s\n", dst); 
         
-            
+         //receiving from socket
+        int numBytes = recv(connected_sockfd, recv_buff, sizeof(recv_buff), 0);
+        if (numBytes == -1){
+            perror ("Server: failed trying to receive message from server");
         
-        if (send(connected_socketfd, response, response_len, 0) == -1) {
-            perror("Server: message send error. ");
-            close(connected_socketfd);
-            return EXIT_FAILURE;
         }
 
-        close (connected_socketfd);
+        char *requestType = strtok(recv_buff, delim);
+        
+        strcpy(response, buildHttpResponse(requestType));
+
+
+        if (send(connected_sockfd, response, sizeof response, 0) == -1) {
+             perror("Server: send response error. ");
+             close(connected_sockfd);
+             return EXIT_FAILURE;
+        }
+
+        close (connected_sockfd);
     
     }
     return EXIT_SUCCESS;
