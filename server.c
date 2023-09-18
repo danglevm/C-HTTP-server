@@ -1,5 +1,6 @@
 #include <asm-generic/socket.h> //a bunch of socket options
 #include <stddef.h> //NULL and size_t, ptrdiff_t
+#include <strings.h>
 #include <unistd.h>//for closing file socket. POSIX system?
 #include <sys/types.h> //definitions of a number of data types used in syscalls
 //for socket.h and in.h to work, need types.h
@@ -10,6 +11,8 @@
 #include <arpa/inet.h> //definitions for internet operations - in_addr and in6_addr
 #include <netinet/in.h>//defines some address info protocols
 #include <string.h> //for string operations
+#include <dirent.h> //for opening directories
+#include <errno.h> //for error numbers
 
 //could not get printf to print to stdout, only to stderr
 #define PORT "8080" //port users will connect to. Alternative to port 80
@@ -27,6 +30,38 @@
 #define RESPONSE_SIZE 1024 //1024 characters
 
 
+//function for getting file extension
+//since i have no understanding of regex for now, I assume that there are no folders with a '.' in it.
+//I'll learn Regex and apply a search
+const char *get_file_ext (const char *file_name) {
+    const char * dot  = strrchr(file_name, '.');
+    if (dot == NULL || dot == file_name) {
+        return "";
+    } 
+    //return the character after the dot
+    return dot + 1;
+
+}
+
+//function for getting file extension media type
+
+const char *get_file_media_type (const char *file_ext){ 
+    if (strcasecmp(file_ext, "html") == 0 || strcasecmp(file_ext, "html") == 0) {
+        return "text/html";
+    } else if (strcasecmp(file_ext, "jpg") == 0 || strcasecmp(file_ext, "jpeg")) {
+        return "image/jpeg";
+    } else if (strcasecmp(file_ext, "png") == 0) {
+        return "image/png";
+    } else if (strcasecmp(file_ext, "txt") == 0){
+        return "text/plain";
+    } else if (strcasecmp(file_ext, "pdf") == 0) {
+        return "application/pdf";
+    } else {
+        //for generic binary files or binary files missing extension
+        return "aplication/octet-stream";
+    }
+}
+
 
 //typecast sockaddr to sockaddr_in for IPv4 or sockaddr_in6 for ipv6
 //
@@ -41,12 +76,15 @@ void * get_in_addr (struct sockaddr *addr) {
 
 }
 
-char * buildHttpResponse (char requestType []) {
+
+
+//for building the http response, probably needs to be more flexible and detailed
+char * buildHttpResponse (const char requestType [], const char requestPath[]) {
      //GET request
         if (strcmp(requestType, GET_REQUEST) == 0) {
             return     "HTTP/1.0 200 OK\r\n"
                        "Content-type: text/html\r\n\r\n"
-                       "<html>Hello World!</html>\r\n";
+                       "<html>Hello Goddamn World!</html>\r\n";
                 
         }  else if ((strcmp(requestType, HEAD_REQUEST) == 0) || (strcmp(requestType, POST_REQUEST) == 0)){
             //HEAD or POST request
@@ -79,13 +117,14 @@ int main (int argc, char *argv []) {
     int status;
     //one line separation between HTTP header and its body
     
-
+    
     //storing the value of the socket file descriptor
     int sockfd;
 
     char recv_buff [MAX_DATA_SIZE];
 
     char response [RESPONSE_SIZE];
+    
 
     /**
     *
@@ -127,12 +166,20 @@ int main (int argc, char *argv []) {
     hints.ai_protocol = 0; //protocol for the returned socket address
     hints.ai_flags = AI_PASSIVE; //Assign the address of the local host to the socket structure
 
+    //check if server directory can be opened
+    DIR* dir = opendir("/home/bollabollo/Documents/C_Programs/dummy");
+    if (dir == NULL) {
+        perror ("Server: cannot open directory error.");
+        return EXIT_FAILURE;
+    } else {
+        printf ("Server: successfully opened server directory\n");
+    }
 
     //hostname = NULL will be assigned depending on the hints flag - 127.0.0.1?
     //hints - type of service requested
     status = getaddrinfo(NULL, PORT , &hints, &res);
 
-    
+
     //gai_strerror translates error codes to a human readable string, suitable for error reporting
     if (status != 0) {
         fprintf (stderr, "Server: get address info error: %s\n", gai_strerror(status));
@@ -191,7 +238,7 @@ int main (int argc, char *argv []) {
         return EXIT_FAILURE;
     }
 
-    fprintf(stderr, "Waiting for connections...\n");
+    fprintf(stdout, "Waiting for connections...\n");
 
     //main loop for accepting connection
     for (;;) {
@@ -218,12 +265,20 @@ int main (int argc, char *argv []) {
         
         }
 
-        char *requestType = strtok(recv_buff, delim);
+        //get the request type
+        char *token = strtok(recv_buff, delim);
+
+        char *requestType = token;
         
-        strcpy(response, buildHttpResponse(requestType));
+        
 
+        //get the URI path
+        token = strtok(NULL, delim);
+        char *URI = token;
 
-        if (send(connected_sockfd, response, sizeof response, 0) == -1) {
+        strcpy(response, buildHttpResponse(requestType, URI));
+    
+        if (send(connected_sockfd, response, strlen(response), 0) == -1) {
              perror("Server: send response error. ");
              close(connected_sockfd);
              return EXIT_FAILURE;
