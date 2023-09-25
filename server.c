@@ -13,6 +13,7 @@
 #include <string.h> //for string operations
 #include <dirent.h> //for opening directories
 #include <errno.h> //for error numbers
+#include <sys/sendfile.h>//for sending file
 
 //could not get printf to print to stdout, only to stderr
 #define PORT "8080" //port users will connect to. Alternative to port 80
@@ -28,6 +29,10 @@
 #define POST_REQUEST "POST"
 
 #define BUFFER_SIZE 1048576 //1,048,576 bytes is the maximum send buffer size according to IBM
+
+
+
+
 
 
 //function for getting file extension
@@ -79,7 +84,7 @@ void * get_in_addr (const struct sockaddr *addr) {
 
 
 //for building the http response, probably needs to be more flexible and detailed
-void buildHttpResponse (char *response, const char *requestType, size_t *response_length) {
+void buildHttpResponse (char *response, const char *requestType, const char *mediaType, size_t *response_length) {
      //GET request
         if (strcmp(requestType, GET_REQUEST) == 0) {
             snprintf(response, BUFFER_SIZE,
@@ -99,7 +104,7 @@ void buildHttpResponse (char *response, const char *requestType, size_t *respons
             snprintf(response, BUFFER_SIZE, 
                        "HTTP/1.0 400 Bad Request\r\n"
                        "Content-type: text/html\r\n\r\n"
-                       "<html>Goodbye World!</html>\r\n");
+                       "<html>Invalid Request!</html>\r\n");
             *response = strlen(response);
         }
 }
@@ -270,6 +275,10 @@ int main (int argc, char *argv []) {
             perror ("Server: failed trying to receive message from server");
         
         }
+        //there are some bytes received
+        if (numBytes > 0) {
+
+        
 
         //get the request type
         char *token = strtok(recv_buff, delim);
@@ -282,6 +291,17 @@ int main (int argc, char *argv []) {
         token = strtok(NULL, delim);
         char *URI = token;
 
+        //find the file and determine if it is the root path or not
+        if (strcmp (URI, "/")) {
+        //opens index.html for reading
+        FILE *sendFile = fopen("/home/bollabollo/Documents/C_Programs/dummy/index.html", "r");
+            if (sendFile == NULL)  {
+                return NULL;
+            }   
+            sendfile(connected_sockfd, int in_fd, NULL, BUFFER_SIZE);
+        }
+    
+
         buildHttpResponse(response, requestType, &response_length);
     
         if (send(connected_sockfd, response, response_length, 0) == -1) {
@@ -292,6 +312,8 @@ int main (int argc, char *argv []) {
 
         close (connected_sockfd);
     
+        }
     }
+    free(response);
     return EXIT_SUCCESS;
 }
