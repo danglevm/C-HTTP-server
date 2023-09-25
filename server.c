@@ -27,7 +27,7 @@
 
 #define POST_REQUEST "POST"
 
-#define RESPONSE_SIZE 1024 //1024 characters
+#define BUFFER_SIZE 1048576 //1,048,576 bytes is the maximum send buffer size according to IBM
 
 
 //function for getting file extension
@@ -65,7 +65,7 @@ const char *get_file_media_type (const char *file_ext){
 
 //typecast sockaddr to sockaddr_in for IPv4 or sockaddr_in6 for ipv6
 //
-void * get_in_addr (struct sockaddr *addr) {
+void * get_in_addr (const struct sockaddr *addr) {
     if (addr->sa_family == AF_INET) {
         //return a pointer to an struct containing internet address for IPv4
         return &(((struct sockaddr_in*)addr)->sin_addr);
@@ -79,22 +79,28 @@ void * get_in_addr (struct sockaddr *addr) {
 
 
 //for building the http response, probably needs to be more flexible and detailed
-char * buildHttpResponse (const char requestType [], const char requestPath[]) {
+void buildHttpResponse (char *response, const char *requestType, size_t *response_length) {
      //GET request
         if (strcmp(requestType, GET_REQUEST) == 0) {
-            return     "HTTP/1.0 200 OK\r\n"
+            snprintf(response, BUFFER_SIZE,
+                        "HTTP/1.0 200 OK\r\n"
                        "Content-type: text/html\r\n\r\n"
-                       "<html>Hello Goddamn World!</html>\r\n";
+                       "<html>Hello Goddamn World!</html>\r\n");
+            *response_length = strlen(response);
                 
         }  else if ((strcmp(requestType, HEAD_REQUEST) == 0) || (strcmp(requestType, POST_REQUEST) == 0)){
             //HEAD or POST request
-            return     "HTTP/1.0 501 Not Implemented\r\n"
+            snprintf(response, BUFFER_SIZE,
+                       "HTTP/1.0 501 Not Implemented\r\n"
                        "Content-type: text/html\r\n\r\n"
-                       "<html>Not Hello World!</html>\r\n";
+                       "<html>Not Hello World!</html>\r\n");
+            *response_length = strlen(response);
         } else {
-            return     "HTTP/1.0 400 Bad Request\r\n"
+            snprintf(response, BUFFER_SIZE, 
+                       "HTTP/1.0 400 Bad Request\r\n"
                        "Content-type: text/html\r\n\r\n"
-                       "<html>Goodbye World!</html>\r\n";
+                       "<html>Goodbye World!</html>\r\n");
+            *response = strlen(response);
         }
 }
 
@@ -123,9 +129,9 @@ int main (int argc, char *argv []) {
 
     char recv_buff [MAX_DATA_SIZE];
 
-    char response [RESPONSE_SIZE];
+    char *response = (char*) malloc(BUFFER_SIZE * sizeof(char)); //returns a char pointer pointing to the beginning of the allocated mem
     
-
+    size_t response_length; //for storing potential negative numbers
     /**
     *
     */
@@ -276,9 +282,9 @@ int main (int argc, char *argv []) {
         token = strtok(NULL, delim);
         char *URI = token;
 
-        strcpy(response, buildHttpResponse(requestType, URI));
+        buildHttpResponse(response, requestType, &response_length);
     
-        if (send(connected_sockfd, response, strlen(response), 0) == -1) {
+        if (send(connected_sockfd, response, response_length, 0) == -1) {
              perror("Server: send response error. ");
              close(connected_sockfd);
              return EXIT_FAILURE;
