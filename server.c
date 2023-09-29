@@ -38,8 +38,8 @@
 //function for getting file extension
 //since i have no understanding of regex for now, I assume that there are no folders with a '.' in it.
 //I'll learn Regex and apply a search
-const char *get_file_ext (const char *file_name) {
-    const char * dot  = strrchr(file_name, '.');
+char *get_file_ext (char *file_name) {
+    char * dot  = strrchr(file_name, '.');
     if (dot == NULL || dot == file_name) {
         return "";
     } 
@@ -50,7 +50,7 @@ const char *get_file_ext (const char *file_name) {
 
 //function for getting file extension media type
 
-const char *get_file_media_type (const char *file_ext){ 
+char *get_file_media_type (const char *file_ext){ 
     if (strcasecmp(file_ext, "html") == 0 || strcasecmp(file_ext, "html") == 0) {
         return "text/html";
     } else if (strcasecmp(file_ext, "jpg") == 0 || strcasecmp(file_ext, "jpeg")) {
@@ -84,13 +84,13 @@ void * get_in_addr (const struct sockaddr *addr) {
 
 
 //for building the http response, probably needs to be more flexible and detailed
-void buildHttpResponse (char *response, const char *requestType, const char *mediaType, size_t *response_length) {
+void buildHttpResponse (char *response, char *requestType, char *mediaType, size_t *response_length) {
      //GET request
         if (strcmp(requestType, GET_REQUEST) == 0) {
             snprintf(response, BUFFER_SIZE,
                         "HTTP/1.0 200 OK\r\n"
-                       "Content-type: text/html\r\n\r\n"
-                       "<html>Hello Goddamn World!</html>\r\n");
+                       "Content-type: %s\r\n\r\n",
+                       mediaType);
             *response_length = strlen(response);
                 
         }  else if ((strcmp(requestType, HEAD_REQUEST) == 0) || (strcmp(requestType, POST_REQUEST) == 0)){
@@ -284,25 +284,42 @@ int main (int argc, char *argv []) {
         char *token = strtok(recv_buff, delim);
 
         char *requestType = token;
+
+        char *formatType = "";
         
         
 
         //get the URI path
         token = strtok(NULL, delim);
-        char *URI = token;
+        char *URI = token;    
+
 
         //find the file and determine if it is the root path or not
-        if (strcmp (URI, "/")) {
+        int res = strcmp(URI, "/");
+        if (res == 0) {
         //opens index.html for reading
         FILE *sendFile = fopen("/home/bollabollo/Documents/C_Programs/dummy/index.html", "r");
-            if (sendFile == NULL)  {
-                return NULL;
-            }   
-            sendfile(connected_sockfd, int in_fd, NULL, BUFFER_SIZE);
-        }
-    
+        if (sendFile == NULL)  {
+            perror("Server: failed to open requested resource");
+            continue;
+        }   
 
-        buildHttpResponse(response, requestType, &response_length);
+        //get file descriptor
+        int fd = fileno(sendFile);
+
+        //get the size of the file. set file pointer to the end, get its size then set it back
+        fseek(sendFile, 0, SEEK_END);
+        int fileSize = ftell(sendFile);
+        fseek(sendFile, 0, SEEK_END);
+
+
+        sendfile(connected_sockfd, fd, 0, fileSize);
+        const char *fileExtension = get_file_ext("index.html");
+        formatType = get_file_media_type(fileExtension);
+        
+        }
+        buildHttpResponse(response, requestType, formatType, &response_length);
+        
     
         if (send(connected_sockfd, response, response_length, 0) == -1) {
              perror("Server: send response error. ");
