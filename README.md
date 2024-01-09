@@ -1,4 +1,4 @@
-# CLI-C-HTTP-Server-Client
+# CLI C HTTP Server and Client
 HTTP/1.0 compliant server and client applications in C that can be run from CLI. Designed according to the standards laid out in RFC 1945: https://datatracker.ietf.org/doc/html/rfc1945.
 
 ## 💾 Project Files Description
